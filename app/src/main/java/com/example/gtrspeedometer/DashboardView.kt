@@ -28,13 +28,13 @@ import kotlin.math.sin
  *
  * Everything is drawn in a fixed virtual space of [VW] x [VH] units that is
  * scaled uniformly to fit the screen, so the layout looks the same on every
- * landscape phone.
+ * phone held upright.
  */
 class DashboardView(context: Context) : View(context) {
 
     companion object {
-        const val VW = 1600f
-        const val VH = 760f
+        const val VW = 800f
+        const val VH = 1720f
         const val MAX_SPEED = 300f
 
         private const val GAUGE_START = 135f
@@ -68,21 +68,21 @@ class DashboardView(context: Context) : View(context) {
     private var lastFrameNanos = 0L
 
     // ---- Layout (virtual units) ----
-    private val gCx = 800f
-    private val gCy = 352f
-    private val gR = 318f
+    private val gCx = 400f
+    private val gCy = 592f
+    private val gR = 340f
 
-    private val gfCx = 240f
-    private val gfCy = 398f
+    private val gfCx = 205f
+    private val gfCy = 1150f
     private val gfR = 150f
 
-    private val batCx = 1392f
-    private val batCy = 168f
-    private val batR = 120f
+    private val batCx = 595f
+    private val batCy = 1150f
+    private val batR = 150f
 
-    private val altRect = RectF(40f, 600f, 470f, 690f)
-    private val statsRect = RectF(1166f, 318f, 1562f, 648f)
-    private val mapRect = RectF(1260f, 668f, 1562f, 742f)
+    private val statsRect = RectF(40f, 1370f, 760f, 1530f)
+    private val altRect = RectF(40f, 1550f, 390f, 1636f)
+    private val mapRect = RectF(420f, 1556f, 760f, 1630f)
 
     private var scale = 1f
     private var offX = 0f
@@ -403,16 +403,16 @@ class DashboardView(context: Context) : View(context) {
 
     private fun drawBottomTrim(canvas: Canvas) {
         path.reset()
-        path.moveTo(30f, 742f)
-        path.lineTo(470f, 742f)
-        path.lineTo(520f, 704f)
-        path.lineTo(1080f, 704f)
-        path.lineTo(1130f, 742f)
-        path.lineTo(1250f, 742f)
+        path.moveTo(20f, 1700f)
+        path.lineTo(150f, 1700f)
+        path.lineTo(195f, 1662f)
+        path.lineTo(605f, 1662f)
+        path.lineTo(650f, 1700f)
+        path.lineTo(780f, 1700f)
 
         // Dark carbon strip under the trim line
         fill.shader = faceShader
-        canvas.drawRect(470f, 704f, 1130f, VH, fill)
+        canvas.drawRect(150f, 1662f, 650f, VH, fill)
         fill.shader = null
 
         stroke.strokeCap = Paint.Cap.ROUND
@@ -431,14 +431,14 @@ class DashboardView(context: Context) : View(context) {
         text.color = Color.rgb(170, 174, 182)
         text.letterSpacing = 0.5f
         text.textAlign = Paint.Align.RIGHT
-        canvas.drawText("NISSAN", 752f, 740f, text)
+        canvas.drawText("NISSAN", 352f, 1700f, text)
         text.letterSpacing = 0f
-        drawGtrLogo(canvas, 800f, 730f, 0.42f)
+        drawGtrLogo(canvas, 400f, 1690f, 0.42f)
         text.typeface = typeBoldItalic
         text.textSize = 32f
         text.textAlign = Paint.Align.LEFT
         text.color = Color.rgb(120, 124, 132)
-        canvas.drawText("R35", 850f, 742f, text)
+        canvas.drawText("R35", 450f, 1702f, text)
     }
 
     /** Stylised "GT" over a big red "R", centred on [cx]. */
@@ -708,7 +708,7 @@ class DashboardView(context: Context) : View(context) {
         canvas.drawText("E", cx + cos(ea).toFloat() * (r - 62f), cy + sin(ea).toFloat() * (r - 62f) + 9f, text)
 
         // Battery icon
-        val ix = cx + 30f
+        val ix = cx + 44f
         val iy = cy + 6f
         stroke.color = Color.rgb(220, 222, 228)
         stroke.strokeWidth = 3f
@@ -760,7 +760,12 @@ class DashboardView(context: Context) : View(context) {
         stroke.strokeWidth = 2f
         canvas.drawRoundRect(statsRect, 14f, 14f, stroke)
 
-        val rowH = statsRect.height() / 4f
+        val cellW = statsRect.width() / 2f
+        val cellH = statsRect.height() / 2f
+        stroke.color = Color.argb(60, 255, 255, 255)
+        stroke.strokeWidth = 1.5f
+        canvas.drawLine(statsRect.centerX(), statsRect.top + 14f, statsRect.centerX(), statsRect.bottom - 14f, stroke)
+        canvas.drawLine(statsRect.left + 18f, statsRect.centerY(), statsRect.right - 18f, statsRect.centerY(), stroke)
         val rows = arrayOf(
             Triple("ความเร็วปัจจุบัน", shownSpeed.roundToInt().toString(), "km/h"),
             Triple("ความเร็วสูงสุด", maxSpeed.roundToInt().toString(), "km/h"),
@@ -768,21 +773,17 @@ class DashboardView(context: Context) : View(context) {
             Triple("เวลาเดินทาง", formatDuration(tripMillis), "")
         )
         for ((i, row) in rows.withIndex()) {
-            val top = statsRect.top + i * rowH
-            if (i > 0) {
-                stroke.color = Color.argb(60, 255, 255, 255)
-                stroke.strokeWidth = 1.5f
-                canvas.drawLine(statsRect.left + 18f, top, statsRect.right - 18f, top, stroke)
-            }
-            val iconX = statsRect.left + 52f
-            val iconY = top + rowH / 2f
+            val left = statsRect.left + (i % 2) * cellW
+            val top = statsRect.top + (i / 2) * cellH
+            val iconX = left + 44f
+            val iconY = top + cellH / 2f
             drawStatIcon(canvas, i, iconX, iconY)
 
             text.typeface = typeRegular
             text.textSize = 20f
             text.color = GREY_TEXT
             text.textAlign = Paint.Align.LEFT
-            val tx = statsRect.left + 100f
+            val tx = left + 88f
             canvas.drawText(row.first, tx, top + 30f, text)
 
             text.typeface = typeBold

@@ -2,7 +2,7 @@
 
 GPS speedometer for Android with a dashboard inspired by the Nissan GT-R R35 gauge cluster.
 
-- 0–300 km/h speedometer with carbon face, red illuminated ring, animated needle and digital readout
+- Portrait layout; 0–300 km/h speedometer with carbon face, red illuminated ring, animated needle and digital readout
 - G-force meter (accelerometer)
 - Battery level shown as a "fuel" gauge
 - Current / max speed, trip distance, trip time, altitude, coordinates, GPS signal
