@@ -305,7 +305,7 @@ class DashboardView(context: Context) : View(context) {
         text.textAlign = Paint.Align.CENTER
         text.color = Color.rgb(210, 212, 218)
         text.textSize = 20f
-        canvas.drawText("G-FORCE", gfCx, gfCy - gfR * 0.86f - 14f, text)
+        canvas.drawText("G-FORCE", gfCx, gfCy - gfR - 18f, text)
         text.typeface = typeRegular
         text.textSize = 17f
         text.color = GREY_TEXT
@@ -332,7 +332,7 @@ class DashboardView(context: Context) : View(context) {
         text.typeface = typeBold
         text.textSize = 20f
         text.color = Color.WHITE
-        canvas.drawText(String.format(Locale.US, "%.2f G", g), gfCx, gfCy + gfR * 0.86f + 30f, text)
+        canvas.drawText(String.format(Locale.US, "%.2f G", g), gfCx, gfCy + gfR + 36f, text)
         text.textAlign = Paint.Align.LEFT
     }
 
@@ -537,22 +537,22 @@ class DashboardView(context: Context) : View(context) {
         // Numerals
         text.typeface = typeBoldItalic
         text.textAlign = Paint.Align.CENTER
-        text.textSize = 40f
+        text.textSize = 34f
         text.textSkewX = -0.12f
         for (n in 0..300 step 20) {
             val a = Math.toRadians(speedAngle(n.toFloat()).toDouble())
-            val nr = r - 104f
+            val nr = r - 112f
             text.color = if (n >= 260) Color.rgb(255, 80, 70) else Color.WHITE
-            canvas.drawText(n.toString(), cx + cos(a).toFloat() * nr, cy + sin(a).toFloat() * nr + 14f, text)
+            canvas.drawText(n.toString(), cx + cos(a).toFloat() * nr, cy + sin(a).toFloat() * nr + 12f, text)
         }
         text.textSkewX = 0f
 
         text.typeface = typeRegular
         text.textSize = 26f
         text.color = Color.rgb(220, 222, 228)
-        canvas.drawText("km/h", cx, cy - 165f, text)
+        canvas.drawText("km/h", cx, cy - 148f, text)
 
-        drawGtrLogo(canvas, cx, cy - 92f, 0.62f)
+        drawGtrLogo(canvas, cx, cy - 80f, 0.6f)
 
         drawSpeedProgress(canvas, cx, cy, r)
         drawDigitalReadout(canvas, cx, cy, faceR)
@@ -702,10 +702,10 @@ class DashboardView(context: Context) : View(context) {
         text.textSize = 24f
         text.color = Color.WHITE
         text.textAlign = Paint.Align.CENTER
-        val fa = Math.toRadians(start + sweep + 0.0)
-        val ea = Math.toRadians(start + 0.0)
-        canvas.drawText("F", cx + cos(fa).toFloat() * (r - 70f) - 8f, cy + sin(fa).toFloat() * (r - 70f) + 18f, text)
-        canvas.drawText("E", cx + cos(ea).toFloat() * (r - 70f) + 10f, cy + sin(ea).toFloat() * (r - 70f) - 2f, text)
+        val fa = Math.toRadians(start + sweep - 14.0)
+        val ea = Math.toRadians(start + 14.0)
+        canvas.drawText("F", cx + cos(fa).toFloat() * (r - 62f), cy + sin(fa).toFloat() * (r - 62f) + 9f, text)
+        canvas.drawText("E", cx + cos(ea).toFloat() * (r - 62f), cy + sin(ea).toFloat() * (r - 62f) + 9f, text)
 
         // Battery icon
         val ix = cx + 30f

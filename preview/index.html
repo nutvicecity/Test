@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GT-R Speedometer Preview</title>
+<style>
+  :root { --bg: #050506; }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
+  body { display: flex; align-items: center; justify-content: center; }
+  .phone { width: min(100vw - 32px, 1200px); aspect-ratio: 20 / 9; border-radius: 40px;
+           border: 6px solid #2a2c31; box-shadow: 0 0 0 2px #55585f, 0 20px 60px #000; overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<div class="phone"><canvas id="c"></canvas></div>
+<script>
+// Browser port of DashboardView.kt (same virtual layout), driven by simulated GPS data.
+const VW = 1600, VH = 760, MAX = 300, START = 135, SWEEP = 270;
+const RED = 'rgb(225,6,0)', RED_B = 'rgb(255,48,32)', GREY = 'rgb(150,156,166)';
+const PANEL_FILL = 'rgba(14,16,20,0.78)', PANEL_STROKE = 'rgb(48,53,62)';
+const FONT = '"Roboto","Noto Sans Thai","Segoe UI",sans-serif';
+const S = { target: 0, shown: 0, max: 0, dist: 0, trip: 0, alt: 182, lat: 16.4207, lon: 102.8356,
+            fix: true, sats: 11, gx: 0, gy: 0, bat: 78 };
+const params = new URLSearchParams(location.search);
+const fixed = params.has('speed') ? +params.get('speed') : null;
+if (fixed !== null) Object.assign(S, { target: fixed, shown: fixed, max: 152, dist: 12.4, trip: 512000, gx: .18, gy: -.12 });
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const rad = d => d * Math.PI / 180;
+const ang = v => START + Math.min(Math.max(v, 0), MAX) / MAX * SWEEP;
+
+const tile = document.createElement('canvas'); tile.width = tile.height = 16;
+{ const t = tile.getContext('2d'); t.fillStyle = 'rgb(16,17,19)'; t.fillRect(0,0,16,16);
+  t.fillStyle = 'rgb(28,29,32)'; t.fillRect(0,0,8,8); t.fillRect(8,8,8,8);
+  t.fillStyle = 'rgb(36,37,41)'; t.fillRect(0,0,8,2); t.fillRect(8,8,2,8); }
+let carbon;
+
+function font(w, size, italic) { ctx.font = `${italic ? 'italic ' : ''}${w} ${size}px ${FONT}`; }
+function txt(s, x, y, align = 'left') { ctx.textAlign = align; ctx.fillText(s, x, y); }
+function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
+function line(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+function glowStroke(drawPath, n, base, step, color) {
+  for (let i = n; i >= 1; i--) { ctx.strokeStyle = color; ctx.lineWidth = base + i * step; drawPath(); ctx.stroke(); }
+}
+
+function header() {
+  const d = new Date();
+  ctx.fillStyle = '#fff'; font('bold', 34); txt(String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'), 48, 58);
+  ctx.save(); ctx.translate(64, 106); ctx.rotate(rad(-45)); ctx.fillStyle = 'rgb(220,222,228)';
+  ctx.fillRect(-6,-8,12,16); ctx.fillRect(-22,-5,13,10); ctx.fillRect(9,-5,13,10); ctx.restore();
+  font('bold', 32); txt('GPS Speedometer', 96, 118);
+  const end = 96 + ctx.measureText('GPS Speedometer').width;
+  const ok = S.fix, col = ok ? [46,204,64] : [240,160,30], label = ok ? 'GPS' : 'กำลังค้นหา GPS';
+  font('bold', 22); const bw = ctx.measureText(label).width + 62;
+  const x = end + 18;
+  ctx.beginPath(); ctx.roundRect(x, 90, bw, 38, 19);
+  ctx.fillStyle = `rgba(${col},0.24)`; ctx.fill(); ctx.strokeStyle = `rgb(${col})`; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = `rgb(${col})`; txt(label, x + 14, 117);
+  const bars = !ok ? 0 : S.sats >= 10 ? 4 : S.sats >= 7 ? 3 : S.sats >= 5 ? 2 : 1;
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = i < bars ? `rgb(${col})` : 'rgba(255,255,255,.3)';
+    const bx = x + bw - 40 + i * 7; ctx.fillRect(bx, 120 - (i + 1) * 5, 4, (i + 1) * 5); }
+  // pin
+  ctx.fillStyle = GREY; ctx.beginPath(); ctx.arc(64, 164, 11, 0, Math.PI * 2);
+  ctx.moveTo(54, 169); ctx.lineTo(64, 186); ctx.lineTo(74, 169); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgb(12,13,15)'; circle(64, 164, 4.5); ctx.fill();
+  ctx.fillStyle = GREY; font('normal', 24);
+  txt(`${Math.abs(S.lat).toFixed(4)}° ${S.lat >= 0 ? 'N' : 'S'}`, 96, 164);
+  txt(`${Math.abs(S.lon).toFixed(4)}° ${S.lon >= 0 ? 'E' : 'W'}`, 96, 194);
+}
+
+function bezel(cx, cy, r) {
+  ctx.fillStyle = '#000'; circle(cx, cy + 4, r + 10); ctx.fill();
+  const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  g.addColorStop(0, 'rgb(220,222,228)'); g.addColorStop(.5, 'rgb(70,72,78)'); g.addColorStop(1, 'rgb(170,172,178)');
+  ctx.strokeStyle = g; ctx.lineWidth = 7; circle(cx, cy, r); ctx.stroke();
+  const f = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  f.addColorStop(0, 'rgb(26,27,31)'); f.addColorStop(1, 'rgb(10,11,13)');
+  ctx.fillStyle = f; circle(cx, cy, r - 4); ctx.fill();
+}
+
+function gforce() {
+  const cx = 240, cy = 398, r = 150; bezel(cx, cy, r);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,.27)';
+  circle(cx, cy, r * .43); ctx.stroke(); circle(cx, cy, r * .86); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; circle(cx, cy, r * .645); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; line(cx - r * .9, cy, cx + r * .9, cy); line(cx, cy - r * .9, cx, cy + r * .9);
+  ctx.fillStyle = 'rgb(210,212,218)'; font('bold', 20); txt('G-FORCE', cx, cy - r - 18, 'center');
+  ctx.fillStyle = GREY; font('normal', 17);
+  txt('1.0', cx + 18, cy - r * .86 + 18, 'center'); txt('0.5', cx + 18, cy - r * .43 + 18, 'center');
+  txt('0.5', cx - r * .43 - 18, cy - 8, 'center'); txt('0.5', cx + r * .43 + 18, cy - 8, 'center');
+  txt('1.0', cx - r * .86 + 2, cy - 8, 'center'); txt('1.0', cx + r * .86 - 2, cy - 8, 'center');
+  const reach = r * .86, cl = v => Math.max(-1.1, Math.min(1.1, v));
+  const dx = cx + cl(S.gx) * reach, dy = cy + cl(S.gy) * reach;
+  for (let i = 4; i >= 1; i--) { ctx.fillStyle = 'rgba(255,30,20,.11)'; circle(dx, dy, 9 + i * 5); ctx.fill(); }
+  ctx.fillStyle = RED_B; circle(dx, dy, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(255,200,190,.8)'; circle(dx - 3, dy - 3, 3); ctx.fill();
+  ctx.fillStyle = '#fff'; font('bold', 20); txt(Math.hypot(S.gx, S.gy).toFixed(2) + ' G', cx, cy + r + 36, 'center');
+}
+
+function altitude() {
+  const L = 40, T = 600, R = 470, B = 690;
+  ctx.beginPath(); ctx.moveTo(L + 12, T); ctx.lineTo(R - 46, T); ctx.lineTo(R, B); ctx.lineTo(L + 12, B);
+  ctx.quadraticCurveTo(L, B, L, B - 12); ctx.lineTo(L, T + 12); ctx.quadraticCurveTo(L, T, L + 12, T); ctx.closePath();
+  ctx.fillStyle = PANEL_FILL; ctx.fill(); ctx.strokeStyle = PANEL_STROKE; ctx.lineWidth = 2; ctx.stroke();
+  const bx = L + 36, by = B - 26;
+  ctx.fillStyle = 'rgb(170,176,188)'; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 22, by - 34);
+  ctx.lineTo(bx + 33, by - 18); ctx.lineTo(bx + 42, by - 28); ctx.lineTo(bx + 60, by); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = GREY; font('normal', 22); txt('ความสูง', L + 120, T + 32);
+  ctx.fillStyle = '#fff'; font('bold', 36); txt(Math.round(S.alt) + ' m', L + 120, T + 74);
+}
+
+function logo(cx, cy, s) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s); ctx.transform(1, 0, -0.15, 1, 0, 0);
+  ctx.textAlign = 'center';
+  font('bold', 70, true); ctx.fillStyle = 'rgb(225,228,234)'; ctx.fillText('GT', 0, -32);
+  font('bold', 120, true); ctx.lineWidth = 7; ctx.strokeStyle = 'rgb(215,218,224)'; ctx.strokeText('R', 0, 70);
+  ctx.fillStyle = 'rgb(200,8,16)'; ctx.fillText('R', 0, 70);
+  ctx.restore();
+}
+
+function trim() {
+  const p = () => { ctx.beginPath(); ctx.moveTo(30, 742); ctx.lineTo(470, 742); ctx.lineTo(520, 704);
+    ctx.lineTo(1080, 704); ctx.lineTo(1130, 742); ctx.lineTo(1250, 742); };
+  ctx.fillStyle = carbon; ctx.fillRect(470, 704, 660, VH - 704);
+  ctx.lineCap = 'round'; glowStroke(p, 4, 0, 5, 'rgba(255,20,10,.12)');
+  ctx.strokeStyle = RED; ctx.lineWidth = 3; p(); ctx.stroke(); ctx.lineCap = 'butt';
+  ctx.fillStyle = 'rgb(170,174,182)'; font('bold', 22); ctx.letterSpacing = '11px'; txt('NISSAN', 752, 740, 'right'); ctx.letterSpacing = '0px';
+  logo(800, 730, .42);
+  ctx.fillStyle = 'rgb(120,124,132)'; font('bold', 32, true); txt('R35', 850, 742);
+}
+
+function speedometer() {
+  const cx = 800, cy = 352, r = 318, faceR = r - 22;
+  ctx.fillStyle = '#000'; circle(cx, cy + 6, r + 18); ctx.fill();
+  const bz = ctx.createConicGradient(0, cx, cy);
+  ['rgb(90,92,98)','rgb(235,236,240)','rgb(70,72,78)','rgb(200,202,208)','rgb(60,62,68)','rgb(225,226,230)','rgb(90,92,98)']
+    .forEach((c, i, a) => bz.addColorStop(i / (a.length - 1), c));
+  ctx.strokeStyle = bz; ctx.lineWidth = 16; circle(cx, cy, r + 4); ctx.stroke();
+  ctx.fillStyle = 'rgb(12,12,14)'; circle(cx, cy, r - 4); ctx.fill();
+  glowStroke(() => circle(cx, cy, r - 14), 6, 4, 5, 'rgba(255,20,10,.1)');
+  ctx.strokeStyle = RED; ctx.lineWidth = 4; circle(cx, cy, r - 14); ctx.stroke();
+  ctx.fillStyle = carbon; circle(cx, cy, faceR); ctx.fill();
+  const vg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  vg.addColorStop(0, 'rgba(0,0,0,.16)'); vg.addColorStop(.7, 'rgba(0,0,0,.47)'); vg.addColorStop(1, 'rgba(0,0,0,.92)');
+  ctx.fillStyle = vg; circle(cx, cy, faceR); ctx.fill();
+  // red-line band
+  ctx.strokeStyle = 'rgba(225,6,0,.67)'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.arc(cx, cy, r - 40, rad(ang(260)), rad(ang(300))); ctx.stroke();
+  for (let v = 0; v <= MAX; v += 2) {
+    const a = rad(ang(v)), [len, w] = v % 20 === 0 ? [36, 6] : v % 10 === 0 ? [24, 3.5] : [13, 2];
+    const r1 = r - 34, r2 = r1 - len, c = Math.cos(a), s = Math.sin(a);
+    ctx.strokeStyle = v >= 260 ? 'rgb(255,70,60)' : '#fff'; ctx.lineWidth = w;
+    line(cx + c * r1, cy + s * r1, cx + c * r2, cy + s * r2);
+  }
+  font('bold', 34, true);
+  for (let n = 0; n <= 300; n += 20) {
+    const a = rad(ang(n)), nr = r - 112;
+    ctx.fillStyle = n >= 260 ? 'rgb(255,80,70)' : '#fff';
+    txt(String(n), cx + Math.cos(a) * nr, cy + Math.sin(a) * nr + 12, 'center');
+  }
+  ctx.fillStyle = 'rgb(220,222,228)'; font('normal', 26); txt('km/h', cx, cy - 148, 'center');
+  logo(cx, cy - 80, .6);
+
+  // progress arc
+  if (S.shown > .2) {
+    ctx.lineCap = 'round';
+    const p = () => { ctx.beginPath(); ctx.arc(cx, cy, r - 26, rad(START), rad(ang(S.shown))); };
+    glowStroke(p, 4, 3, 4, 'rgba(255,40,20,.16)');
+    ctx.strokeStyle = RED_B; ctx.lineWidth = 3; p(); ctx.stroke(); ctx.lineCap = 'butt';
+  }
+
+  // digital readout
+  ctx.save(); circle(cx, cy, faceR); ctx.clip();
+  const top = cy + 168;
+  const tp = () => { ctx.beginPath(); ctx.moveTo(cx - 128, top); ctx.lineTo(cx + 128, top); ctx.lineTo(cx + 250, top + 96);
+    ctx.lineTo(cx + 250, cy + faceR + 10); ctx.lineTo(cx - 250, cy + faceR + 10); ctx.lineTo(cx - 250, top + 96); ctx.closePath(); };
+  const dg = ctx.createLinearGradient(0, top, 0, cy + faceR);
+  dg.addColorStop(0, 'rgb(20,20,23)'); dg.addColorStop(.6, 'rgb(6,6,7)'); dg.addColorStop(1, 'rgb(70,6,4)');
+  tp(); ctx.fillStyle = dg; ctx.fill();
+  glowStroke(tp, 3, 0, 4, 'rgba(255,30,20,.18)');
+  ctx.strokeStyle = 'rgb(200,20,10)'; ctx.lineWidth = 2; tp(); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#fff'; font('bold', 112); txt(String(Math.round(S.shown)), cx, cy + 240, 'center');
+  font('normal', 28); txt('km/h', cx, cy + 278, 'center');
+
+  // needle
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rad(ang(S.shown)));
+  const tip = r - 48;
+  const np = () => { ctx.beginPath(); ctx.moveTo(-46, -7); ctx.lineTo(tip, -1.5); ctx.lineTo(tip + 4, 0);
+    ctx.lineTo(tip, 1.5); ctx.lineTo(-46, 7); ctx.closePath(); };
+  ctx.lineJoin = 'round'; glowStroke(np, 5, 0, 5, 'rgba(255,40,20,.12)'); ctx.lineJoin = 'miter';
+  const ng = ctx.createLinearGradient(0, -7, 0, 7);
+  ng.addColorStop(0, 'rgb(255,120,90)'); ng.addColorStop(.5, 'rgb(255,40,20)'); ng.addColorStop(1, 'rgb(170,10,0)');
+  np(); ctx.fillStyle = ng; ctx.fill(); ctx.restore();
+  const hg = ctx.createRadialGradient(cx - 8, cy - 8, 0, cx - 8, cy - 8, 44);
+  hg.addColorStop(0, 'rgb(80,82,88)'); hg.addColorStop(.6, 'rgb(22,23,26)'); hg.addColorStop(1, 'rgb(8,8,9)');
+  ctx.fillStyle = hg; circle(cx, cy, 36); ctx.fill();
+  ctx.strokeStyle = 'rgb(90,92,98)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = 'rgb(30,31,34)'; circle(cx, cy, 14); ctx.fill();
+}
+
+function battery() {
+  const cx = 1392, cy = 168, r = 120, st = 120, sw = 180; bezel(cx, cy, r);
+  const ap = () => { ctx.beginPath(); ctx.arc(cx, cy, r - 18, rad(st), rad(st + sw)); };
+  glowStroke(ap, 4, 4, 4, 'rgba(255,20,10,.12)');
+  ctx.strokeStyle = RED; ctx.lineWidth = 4; ap(); ctx.stroke();
+  for (let i = 0; i <= 8; i++) {
+    const a = rad(st + sw * i / 8), r1 = r - 26, r2 = r1 - (i % 4 === 0 ? 22 : 12);
+    ctx.strokeStyle = i === 0 ? RED_B : '#fff'; ctx.lineWidth = i % 4 === 0 ? 5 : 3;
+    line(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+  }
+  ctx.fillStyle = '#fff'; font('bold', 24);
+  const fa = rad(st + sw - 14), ea = rad(st + 14);
+  txt('F', cx + Math.cos(fa) * (r - 62), cy + Math.sin(fa) * (r - 62) + 9, 'center');
+  txt('E', cx + Math.cos(ea) * (r - 62), cy + Math.sin(ea) * (r - 62) + 9, 'center');
+  const ix = cx + 30, iy = cy + 6, lv = S.bat / 100;
+  ctx.strokeStyle = 'rgb(220,222,228)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(ix - 14, iy - 22, 28, 44, 4); ctx.stroke();
+  ctx.fillStyle = 'rgb(220,222,228)'; ctx.fillRect(ix - 6, iy - 28, 12, 6);
+  ctx.fillStyle = S.bat <= 15 ? RED_B : 'rgb(220,222,228)'; ctx.fillRect(ix - 9, iy + 17 - 34 * lv, 18, 34 * lv);
+  ctx.fillStyle = GREY; font('normal', 20); txt(S.bat + '%', ix, iy + 52, 'center');
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rad(st + sw * lv));
+  const np = () => { ctx.beginPath(); ctx.moveTo(-14, -3.5); ctx.lineTo(r - 32, -1); ctx.lineTo(r - 32, 1); ctx.lineTo(-14, 3.5); ctx.closePath(); };
+  glowStroke(np, 3, 0, 4, 'rgba(255,40,20,.14)'); np(); ctx.fillStyle = RED_B; ctx.fill(); ctx.restore();
+  ctx.fillStyle = 'rgb(40,41,45)'; circle(cx, cy, 14); ctx.fill(); ctx.strokeStyle = 'rgb(90,92,98)'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function statIcon(k, x, y) {
+  ctx.strokeStyle = 'rgb(150,170,200)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  if (k === 0) { ctx.beginPath(); ctx.arc(x, y, 20, rad(140), rad(400)); ctx.stroke(); line(x, y + 2, x + 10, y - 10);
+    for (let t = 0; t <= 4; t++) { const a = rad(160 + t * 55); line(x + Math.cos(a) * 14, y + Math.sin(a) * 14, x + Math.cos(a) * 17, y + Math.sin(a) * 17); } }
+  else if (k === 1) { line(x - 8, y - 20, x - 20, y + 20); line(x + 8, y - 20, x + 20, y + 20); line(x, y - 16, x, y - 8); line(x, y - 2, x, y + 6); line(x, y + 12, x, y + 20); }
+  else if (k === 2) { circle(x, y, 20); ctx.stroke(); line(x, y, x, y - 12); line(x, y, x + 9, y + 4); }
+  else { circle(x, y + 3, 18); ctx.stroke(); line(x - 6, y - 20, x + 6, y - 20); line(x, y - 20, x, y - 15); line(x, y + 3, x + 7, y - 6); }
+  ctx.lineCap = 'butt';
+}
+
+function stats() {
+  const L = 1166, T = 318, R = 1562, B = 648, rowH = (B - T) / 4;
+  ctx.beginPath(); ctx.roundRect(L, T, R - L, B - T, 14); ctx.fillStyle = PANEL_FILL; ctx.fill();
+  ctx.strokeStyle = PANEL_STROKE; ctx.lineWidth = 2; ctx.stroke();
+  const s = Math.floor(S.trip / 1000), p = n => String(n).padStart(2, '0');
+  const rows = [['ความเร็วปัจจุบัน', String(Math.round(S.shown)), 'km/h'], ['ความเร็วสูงสุด', String(Math.round(S.max)), 'km/h'],
+    ['ระยะทางรวม', S.dist.toFixed(1), 'km'], ['เวลาเดินทาง', `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`, '']];
+  rows.forEach((row, i) => {
+    const top = T + i * rowH;
+    if (i > 0) { ctx.strokeStyle = 'rgba(255,255,255,.24)'; ctx.lineWidth = 1.5; line(L + 18, top, R - 18, top); }
+    statIcon(i, L + 52, top + rowH / 2);
+    const tx = L + 100;
+    ctx.fillStyle = GREY; font('normal', 20); txt(row[0], tx, top + 30);
+    ctx.fillStyle = '#fff'; font('bold', 34); txt(row[1], tx, top + 68);
+    if (row[2]) { const w = ctx.measureText(row[1]).width; font('normal', 22); txt(row[2], tx + w + 8, top + 68); }
+  });
+}
+
+function mapButton() {
+  const L = 1260, T = 668, R = 1562, B = 742, h = B - T, y = (T + B) / 2;
+  ctx.beginPath(); ctx.roundRect(L, T, R - L, h, h / 2); ctx.fillStyle = 'rgb(16,19,25)'; ctx.fill();
+  ctx.strokeStyle = 'rgb(60,70,88)'; ctx.lineWidth = 2.5; ctx.stroke();
+  const x = L + 48; ctx.strokeStyle = 'rgb(170,190,220)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.beginPath(); [[-20,-12],[-7,-18],[7,-12],[20,-18],[20,12],[7,18],[-7,12],[-20,18]].forEach(([a,b],i)=> i ? ctx.lineTo(x+a,y+b) : ctx.moveTo(x+a,y+b));
+  ctx.closePath(); ctx.stroke(); line(x - 7, y - 18, x - 7, y + 12); line(x + 7, y - 12, x + 7, y + 18);
+  ctx.fillStyle = 'rgb(210,222,240)'; font('normal', 28); txt('แผนที่', L + 92, y + 10);
+  const c = R - 40; line(c - 6, y - 12, c + 6, y); line(c + 6, y, c - 6, y + 12); ctx.lineJoin = 'miter';
+}
+
+function draw() {
+  const w = cv.clientWidth, h = cv.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const sc = Math.min(w / VW, h / VH);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgb(8,9,11)'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr * sc, 0, 0, dpr * sc, dpr * (w - VW * sc) / 2, dpr * (h - VH * sc) / 2);
+  carbon = carbon || ctx.createPattern(tile, 'repeat');
+  const bg = ctx.createRadialGradient(VW / 2, VH / 2, 0, VW / 2, VH / 2, VW * .65);
+  bg.addColorStop(0, 'rgb(24,25,29)'); bg.addColorStop(1, 'rgb(8,9,11)'); ctx.fillStyle = bg; ctx.fillRect(0, 0, VW, VH);
+  header(); gforce(); altitude(); trim(); speedometer(); battery(); stats(); mapButton();
+}
+
+// Simulated drive: accelerate, cruise, brake, repeat.
+let last = performance.now(), simT = 0, prevTarget = 0;
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, .1); last = now;
+  if (fixed === null) {
+    simT += dt;
+    const ph = simT % 24;
+    S.target = ph < 8 ? ph / 8 * 210 : ph < 14 ? 210 + Math.sin(ph * 2) * 8 : ph < 20 ? 210 * (1 - (ph - 14) / 6) : 0;
+    const acc = (S.target - prevTarget) / Math.max(dt, 1e-3) / 3.6 / 9.81; prevTarget = S.target;
+    S.gy += (Math.max(-1, Math.min(1, acc * .8)) - S.gy) * .1;
+    S.gx += (Math.sin(simT * .9) * .35 - S.gx) * .1;
+    S.trip += dt * 1000; S.dist += S.target / 3600 * dt;
+    S.max = Math.max(S.max, S.target);
+  }
+  S.shown += (S.target - S.shown) * (1 - Math.exp(-dt * 6));
+  draw(); requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
