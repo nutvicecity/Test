@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "GTRSpeedometer"
-include(":app")
+include(":app", ":ytmp3")

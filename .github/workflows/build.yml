@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,3 +33,22 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/release/app-release.apk
+
+      - name: Rename YT MP3 APK
+        run: cp ytmp3/build/outputs/apk/release/ytmp3-release.apk YT-MP3.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-MP3-apk
+          path: YT-MP3.apk
+
+      # Direct download link: Releases -> "ytmp3-latest" -> YT-MP3.apk
+      - name: Publish YT MP3 release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ytmp3-latest --yes --cleanup-tag || true
+          gh release create ytmp3-latest YT-MP3.apk --prerelease \
+            --target "$GITHUB_SHA" --title "YT MP3 (latest build)" \
+            --notes "Built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}. Install YT-MP3.apk on Android 7.0+."
