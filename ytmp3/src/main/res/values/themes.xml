@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.YtMp3" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#E53935</item>
+        <item name="android:colorPrimary">#C62828</item>
+        <item name="android:windowBackground">#121214</item>
+        <item name="android:statusBarColor">#121214</item>
+        <item name="android:navigationBarColor">#121214</item>
+    </style>
+</resources>
